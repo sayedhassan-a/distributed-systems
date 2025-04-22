@@ -39,6 +39,8 @@ type RequestTaskArgs struct {
 type RequestTaskReply struct {
 	TaskType TaskType
 	Filename string
+	nReduce int
+	TaskNumber int
 }
 
 // Add your RPC definitions here.

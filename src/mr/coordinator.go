@@ -15,6 +15,7 @@ type Coordinator struct {
 	CurrentFile int
 	MapFinished    bool
 	ReduceFinished bool
+	nReduce int
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -23,6 +24,7 @@ func (c *Coordinator) GetTask(args *RequestTaskArgs, reply *RequestTaskReply) er
 	if !c.MapFinished {
 		reply.TaskType = MapTaskType
 		reply.Filename = c.InputFiles[c.CurrentFile]
+		reply.nReduce = c.nReduce
 		c.CurrentFile++
 
 	} else {
@@ -72,6 +74,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.MapFinished = false
 	c.ReduceFinished = false
 	c.CurrentFile = 0
+	c.nReduce = nReduce
 
 	c.server()
 	return &c

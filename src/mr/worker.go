@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
@@ -15,7 +16,6 @@ type KeyValue struct {
 	Key   string
 	Value string
 }
-
 
 type CallError struct {
 	timestamp time.Time
@@ -50,7 +50,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 		if reply.TaskType == MapTaskType {
 			RunMapTask(mapf, &reply)
-		} else if reply.TaskType == ReduceTaskType{
+		} else if reply.TaskType == ReduceTaskType {
 
 		}
 	}
@@ -84,23 +84,47 @@ func CallGetTask(retry int) (RequestTaskReply, error) {
 	}
 }
 
-func RunMapTask(mapf func(string, string) []KeyValue,reply *RequestTaskReply) {
+
+func RunMapTask(mapf func(string, string) []KeyValue, reply *RequestTaskReply) {
 	filename := reply.Filename
+	nReduce := reply.nReduce
 	file, err := os.Open(filename)
-		if err != nil {
-			log.Fatalf("cannot open %v", filename)
+	if err != nil {
+		log.Fatalf("cannot open %v", filename)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", filename)
+	}
+	file.Close()
+	keyValueList := mapf(filename, string(content))
+
+	keyValueBuckets := make([][]KeyValue, nReduce)
+
+	for _, keyValue := range keyValueList {
+		hash := ihash(keyValue.Key)
+		key := hash % nReduce
+		keyValueBuckets[key] = append(keyValueBuckets[key], keyValue)
+	}
+
+	for _, keyValueList := range keyValueBuckets {
+		if len(keyValueList) != 0 {
+			WriteToFile(keyValueList, reply, ihash(keyValueList[0].Key))
 		}
-		content, err := ioutil.ReadAll(file)
-		if err != nil {
-			log.Fatalf("cannot read %v", filename)
-		}
-		file.Close()
-		keyValueList := mapf(filename, string(content))
-		WriteToFile(keyValueList)
+	}
 }
 
-func WriteToFile(keyValueList []KeyValue) {
-	panic("unimplemented")
+func WriteToFile(keyValueList []KeyValue, reply *RequestTaskReply, reduceTask int) {
+	filename := fmt.Sprintf("mr-%d-%d", reply.TaskNumber, reduceTask)
+	file, err := os.Open(filename)
+	if err != nil {
+		log.Fatalf("cannot open %v", filename)
+	}
+	defer file.Close()
+
+	enc := json.NewEncoder(file)
+	enc.Encode(keyValueList)
+
 }
 
 func CallExample() {
