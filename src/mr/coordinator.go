@@ -12,11 +12,11 @@ import (
 
 type Coordinator struct {
 	// Your definitions here.
-	InputFiles []string
-	CurrentFile int
-	MapFinished    bool
-	ReduceFinished bool
-	nReduce int
+	InputFiles        []string
+	CurrentFile       int
+	MapFinished       bool
+	ReduceFinished    bool
+	nReduce           int
 	CurrentReduceTask int
 }
 
@@ -31,17 +31,16 @@ func (c *Coordinator) GetTask(args *RequestTaskArgs, reply *RequestTaskReply) er
 		c.CurrentFile++
 		if len(c.InputFiles) == c.CurrentFile {
 			c.MapFinished = true
-			reply.TaskNumber = -0
 		}
 		fmt.Println(reply)
 		return nil
 
-	} else if !c.ReduceFinished{
+	} else if !c.ReduceFinished {
 		reply.TaskType = ReduceTaskType
 		reply.TaskNumber = c.CurrentReduceTask
 		reply.NReduce = c.nReduce
 		reply.NumberOfMapTasks = len(c.InputFiles)
-		c.CurrentReduceTask++ 
+		c.CurrentReduceTask++
 		if c.CurrentReduceTask == c.nReduce {
 			c.ReduceFinished = true
 		}
@@ -49,6 +48,7 @@ func (c *Coordinator) GetTask(args *RequestTaskArgs, reply *RequestTaskReply) er
 	}
 	return &CallError{time.Now(), "call error"}
 }
+
 // an example RPC handler.
 //
 // the RPC argument and reply types are defined in rpc.go.
