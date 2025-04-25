@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"time"
+
 )
 
 // Map functions return a slice of KeyValue.
@@ -51,6 +52,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		if reply.TaskType == MapTaskType {
 			RunMapTask(mapf, &reply)
 		} else if reply.TaskType == ReduceTaskType {
+			RunReduceTask(reducef, &reply)
 
 		}
 	}
@@ -71,6 +73,7 @@ func CallGetTask(retry int) (RequestTaskReply, error) {
 	reply := RequestTaskReply{}
 
 	ok := call("Coordinator.GetTask", &args, &reply)
+	fmt.Println(reply)
 
 	if ok {
 		return reply, nil
@@ -84,10 +87,9 @@ func CallGetTask(retry int) (RequestTaskReply, error) {
 	}
 }
 
-
 func RunMapTask(mapf func(string, string) []KeyValue, reply *RequestTaskReply) {
 	filename := reply.Filename
-	nReduce := reply.nReduce
+	nReduce := reply.NReduce
 	file, err := os.Open(filename)
 	if err != nil {
 		log.Fatalf("cannot open %v", filename)
@@ -100,23 +102,21 @@ func RunMapTask(mapf func(string, string) []KeyValue, reply *RequestTaskReply) {
 	keyValueList := mapf(filename, string(content))
 
 	keyValueBuckets := make([][]KeyValue, nReduce)
-
 	for _, keyValue := range keyValueList {
 		hash := ihash(keyValue.Key)
 		key := hash % nReduce
 		keyValueBuckets[key] = append(keyValueBuckets[key], keyValue)
 	}
-
 	for _, keyValueList := range keyValueBuckets {
 		if len(keyValueList) != 0 {
-			WriteToFile(keyValueList, reply, ihash(keyValueList[0].Key))
+			WriteToFile(keyValueList, reply, ihash(keyValueList[0].Key) % reply.NReduce)
 		}
 	}
 }
 
 func WriteToFile(keyValueList []KeyValue, reply *RequestTaskReply, reduceTask int) {
 	filename := fmt.Sprintf("mr-%d-%d", reply.TaskNumber, reduceTask)
-	file, err := os.Open(filename)
+	file, err := os.Create(filename)
 	if err != nil {
 		log.Fatalf("cannot open %v", filename)
 	}
@@ -124,6 +124,38 @@ func WriteToFile(keyValueList []KeyValue, reply *RequestTaskReply, reduceTask in
 
 	enc := json.NewEncoder(file)
 	enc.Encode(keyValueList)
+
+}
+
+func RunReduceTask(reducef func(string, []string) string, reply *RequestTaskReply) {
+	
+
+	intermediate := make(map[string][]string, 0)
+	for i := range reply.NumberOfMapTasks {
+		filename := fmt.Sprintf("mr-%d-%d", i, reply.TaskNumber)
+		file, err := os.Open(filename)
+		if err != nil {
+			log.Fatalf("cannot open %v", filename)
+		}
+		dec := json.NewDecoder(file)
+
+		var keyValueList []KeyValue
+		dec.Decode(&keyValueList)
+		fmt.Println(keyValueList)
+
+
+		for _, keyValue := range keyValueList {
+			intermediate[keyValue.Key] = append(intermediate[keyValue.Key], keyValue.Value)
+		}
+		file.Close()
+
+	}
+	outputFilename := fmt.Sprintf("mr-out-%d", reply.TaskNumber)
+	outputFile, _ := os.Create(outputFilename)
+	for key, valueList := range intermediate {
+		output := reducef(key, valueList)
+		fmt.Fprintf(outputFile, "%v %v\n", key, output)
+	}
 
 }
 
@@ -167,7 +199,6 @@ func call(rpcname string, args interface{}, reply interface{}) bool {
 	if err == nil {
 		return true
 	}
-
 	fmt.Println(err)
 	return false
 }

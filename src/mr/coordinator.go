@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"time"
 )
 
 type Coordinator struct {
@@ -16,6 +17,7 @@ type Coordinator struct {
 	MapFinished    bool
 	ReduceFinished bool
 	nReduce int
+	CurrentReduceTask int
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -24,13 +26,28 @@ func (c *Coordinator) GetTask(args *RequestTaskArgs, reply *RequestTaskReply) er
 	if !c.MapFinished {
 		reply.TaskType = MapTaskType
 		reply.Filename = c.InputFiles[c.CurrentFile]
-		reply.nReduce = c.nReduce
+		reply.NReduce = c.nReduce
+		reply.TaskNumber = c.CurrentFile
 		c.CurrentFile++
+		if len(c.InputFiles) == c.CurrentFile {
+			c.MapFinished = true
+			reply.TaskNumber = -0
+		}
+		fmt.Println(reply)
+		return nil
 
-	} else {
+	} else if !c.ReduceFinished{
 		reply.TaskType = ReduceTaskType
+		reply.TaskNumber = c.CurrentReduceTask
+		reply.NReduce = c.nReduce
+		reply.NumberOfMapTasks = len(c.InputFiles)
+		c.CurrentReduceTask++ 
+		if c.CurrentReduceTask == c.nReduce {
+			c.ReduceFinished = true
+		}
+		return nil
 	}
-	return nil
+	return &CallError{time.Now(), "call error"}
 }
 // an example RPC handler.
 //
@@ -67,7 +84,6 @@ func (c *Coordinator) Done() bool {
 // main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
 func MakeCoordinator(files []string, nReduce int) *Coordinator {
-	fmt.Println(files)
 	c := Coordinator{}
 	// Your code here.
 	c.InputFiles = files
@@ -75,6 +91,7 @@ func MakeCoordinator(files []string, nReduce int) *Coordinator {
 	c.ReduceFinished = false
 	c.CurrentFile = 0
 	c.nReduce = nReduce
+	c.CurrentReduceTask = 0
 
 	c.server()
 	return &c
