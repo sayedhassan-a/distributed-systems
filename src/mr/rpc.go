@@ -22,8 +22,38 @@ type ExampleReply struct {
 	Y int
 }
 
-// Add your RPC definitions here.
+// Define args and reply for RPC to decouple worker and coordinator
+// as to not need to change coordinator after changing Task struct in worker
 
+type TaskType int
+
+const (
+	MapTaskType TaskType = iota
+	ReduceTaskType
+	WaitTaskType
+)
+
+type RequestTaskArgs struct {
+	TaskType TaskType
+}
+
+type RequestTaskReply struct {
+	TaskType         TaskType
+	Filename         string
+	NReduce          int
+	TaskNumber       int
+	NumberOfMapTasks int
+}
+
+type FinishedTaskArgs struct {
+	TaskType   TaskType
+	TaskNumber int
+}
+
+type FinishedTaskReply struct {
+}
+
+// Add your RPC definitions here.
 
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the coordinator.
