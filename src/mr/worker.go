@@ -9,7 +9,6 @@ import (
 	"net/rpc"
 	"os"
 	"time"
-
 )
 
 // Map functions return a slice of KeyValue.
@@ -51,9 +50,14 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 		if reply.TaskType == MapTaskType {
 			RunMapTask(mapf, &reply)
+			CallFinishedTask(3, &FinishedTaskArgs{MapTaskType, reply.TaskNumber})
 		} else if reply.TaskType == ReduceTaskType {
 			RunReduceTask(reducef, &reply)
+			CallFinishedTask(3, &FinishedTaskArgs{ReduceTaskType, reply.TaskNumber})
 
+		} else if reply.TaskType == WaitTaskType {
+			time.Sleep(5000 * time.Millisecond)
+			continue
 		}
 	}
 
@@ -73,7 +77,6 @@ func CallGetTask(retry int) (RequestTaskReply, error) {
 	reply := RequestTaskReply{}
 
 	ok := call("Coordinator.GetTask", &args, &reply)
-	fmt.Println(reply)
 
 	if ok {
 		return reply, nil
@@ -84,6 +87,23 @@ func CallGetTask(retry int) (RequestTaskReply, error) {
 		}
 		fmt.Println("server is down")
 		return RequestTaskReply{}, &CallError{time.Now(), "call failed"}
+	}
+}
+
+func CallFinishedTask(retry int, args *FinishedTaskArgs) error {
+	reply := FinishedTaskReply{}
+
+	ok := call("Coordinator.FinishedTask", &args, &reply)
+
+	if ok {
+		return nil
+	} else {
+		if retry > 0 {
+			fmt.Println("call failed")
+			return CallFinishedTask(retry-1, args)
+		}
+		fmt.Println("server is down")
+		return &CallError{time.Now(), "call failed"}
 	}
 }
 
@@ -109,7 +129,7 @@ func RunMapTask(mapf func(string, string) []KeyValue, reply *RequestTaskReply) {
 	}
 	for _, keyValueList := range keyValueBuckets {
 		if len(keyValueList) != 0 {
-			WriteToFile(keyValueList, reply, ihash(keyValueList[0].Key) % reply.NReduce)
+			WriteToFile(keyValueList, reply, ihash(keyValueList[0].Key)%reply.NReduce)
 		}
 	}
 }
@@ -128,21 +148,18 @@ func WriteToFile(keyValueList []KeyValue, reply *RequestTaskReply, reduceTask in
 }
 
 func RunReduceTask(reducef func(string, []string) string, reply *RequestTaskReply) {
-	
 
 	intermediate := make(map[string][]string, 0)
 	for i := range reply.NumberOfMapTasks {
 		filename := fmt.Sprintf("mr-%d-%d", i, reply.TaskNumber)
 		file, err := os.Open(filename)
 		if err != nil {
-			log.Fatalf("cannot open %v", filename)
+			continue
 		}
 		dec := json.NewDecoder(file)
 
 		var keyValueList []KeyValue
 		dec.Decode(&keyValueList)
-		fmt.Println(keyValueList)
-
 
 		for _, keyValue := range keyValueList {
 			intermediate[keyValue.Key] = append(intermediate[keyValue.Key], keyValue.Value)

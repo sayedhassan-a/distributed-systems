@@ -30,6 +30,7 @@ type TaskType int
 const (
 	MapTaskType TaskType = iota
 	ReduceTaskType
+	WaitTaskType
 )
 
 type RequestTaskArgs struct {
@@ -37,11 +38,19 @@ type RequestTaskArgs struct {
 }
 
 type RequestTaskReply struct {
-	TaskType TaskType
-	Filename string
-	NReduce int
-	TaskNumber int
+	TaskType         TaskType
+	Filename         string
+	NReduce          int
+	TaskNumber       int
 	NumberOfMapTasks int
+}
+
+type FinishedTaskArgs struct {
+	TaskType   TaskType
+	TaskNumber int
+}
+
+type FinishedTaskReply struct {
 }
 
 // Add your RPC definitions here.
